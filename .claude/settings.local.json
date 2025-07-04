@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(cargo init:*)",
+      "Bash(rm:*)",
+      "Bash(cargo:*)",
+      "Bash(jj git init:*)",
+      "Bash(mv:*)",
+      "Bash(mask pack:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": false
+}
