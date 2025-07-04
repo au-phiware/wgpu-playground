@@ -8,7 +8,8 @@
       "Bash(cargo:*)",
       "Bash(jj git init:*)",
       "Bash(mv:*)",
-      "Bash(mask pack:*)"
+      "Bash(mask pack:*)",
+      "Bash(jj diff:*)"
     ]
   },
   "enableAllProjectMcpServers": false

@@ -80,11 +80,11 @@ impl ApplicationHandler<State> for App {
         // This is where proxy.send_event() ends up
         #[cfg(target_arch = "wasm32")]
         {
-            event.window.request_redraw();
             event.resize(
                 event.window.inner_size().width,
                 event.window.inner_size().height,
             );
+            event.window.request_redraw();
         }
         self.state = Some(event);
     }
@@ -104,21 +104,27 @@ impl ApplicationHandler<State> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                state.render();
+                match state.render() {
+                    Ok(_) => {}
+                    // Reconfigure the surface if it's lost or outdated
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        let size = state.window.inner_size();
+                        state.resize(size.width, size.height);
+                    }
+                    Err(e) => {
+                        log::error!("Unable to render {}", e);
+                    }
+                }
             }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
                         physical_key: PhysicalKey::Code(code),
-                        state,
+                        state: key_state,
                         ..
                     },
                 ..
-            } => {
-                if let (KeyCode::Escape, true) = (code, state.is_pressed()) {
-                    event_loop.exit();
-                }
-            },
+            } => state.handle_key(event_loop, code, key_state.is_pressed()),
             _ => {}
         }
     }
