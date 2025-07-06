@@ -1,6 +1,7 @@
 mod state;
 mod app;
 mod vertex;
+mod texture;
 
 use app::App;
 use winit::event_loop::EventLoop;

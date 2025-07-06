@@ -8,15 +8,16 @@ resolver = "3"
 strip = true
 
 [workspace.dependencies]
-wgpu = "25.0"
-winit = "0.30"
-env_logger = "0.11"
-log = "0.4"
-pollster = "0.3"
 anyhow = "1.0"
+bytemuck = "1.23.1"
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
+env_logger = "0.11"
+image = { version = "0.25.6", default-features = false }
+log = "0.4"
+pollster = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.30"
 web-sys = "0.3"
-bytemuck = "1.23.1"
+wgpu = "25.0"
+winit = "0.30"
