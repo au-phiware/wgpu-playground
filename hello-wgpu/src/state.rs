@@ -15,18 +15,63 @@ use wgpu::util::DeviceExt;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+const SQRT3_OVER_2: f32 = 0.866025404; // √3/2 for triangular grid spacing
+
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0],   color: [0.8, 0.0, 0.8] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0],  color: [0.0, 0.0, 0.8] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.0, 0.8, 0.8] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0],   color: [0.0, 0.8, 0.0] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0],    color: [0.8, 0.8, 0.0] }, // E
+    Vertex { position: [ 0.0,  0.5 * SQRT3_OVER_2, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5 * SQRT3_OVER_2, 0.0], color: [0.0, 0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5 * SQRT3_OVER_2, 0.0], color: [0.0, 1.0, 0.0] },
 ];
 
 const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
+    0, 1, 2,
+];
+
+const fn make_vertex(x: f32, y: f32, color: [f32; 3]) -> Vertex {
+    Vertex {
+        position: [x / 3.0, y * SQRT3_OVER_2 / 3.0, 0.0],
+        color,
+    }
+}
+
+// The Hat (acyclic monotile) on triangular grid
+// Hat vertices on triangular grid (6 rows, 6 triangles per row)
+const HAT_VERTICES: &[Vertex] = &[
+    make_vertex(-2.5, -2.5, [1.0, 1.0, 0.0]), //  0
+    make_vertex(-1.5, -2.5, [0.0, 1.0, 0.0]), //  1
+    make_vertex(-0.5, -2.5, [1.0, 1.0, 0.0]), //  2
+    make_vertex( 1.5, -2.5, [1.0, 1.0, 0.0]), //  3
+    make_vertex(-3.0, -1.5, [0.0, 0.0, 1.0]), //  4
+    make_vertex( 0.0, -1.5, [1.0, 0.0, 0.0]), //  5
+    make_vertex( 3.0, -1.5, [0.0, 0.0, 1.0]), //  6
+    make_vertex(-1.5, -0.5, [1.0, 1.0, 0.0]), //  7
+    make_vertex( 0.5, -0.5, [1.0, 1.0, 0.0]), //  8
+    make_vertex( 1.5, -0.5, [0.0, 1.0, 0.0]), //  9
+    make_vertex( 2.5, -0.5, [1.0, 1.0, 0.0]), // 10
+    make_vertex( 0.0,  0.5, [0.0, 0.0, 1.0]), // 11
+    make_vertex(-1.5,  1.5, [0.0, 1.0, 0.0]), // 12
+    make_vertex(-0.5,  1.5, [1.0, 1.0, 0.0]), // 13
+    make_vertex( 1.5,  1.5, [1.0, 1.0, 0.0]), // 14
+    make_vertex( 0.0,  2.5, [1.0, 0.0, 0.0]), // 15
+];
+
+const HAT_INDICES: &[u16] = &[
+    0, 7, 4,
+    1, 7, 0,
+    2, 7, 1,
+    5, 7, 2,
+    8, 7, 5,
+    3, 8, 5,
+    3, 9, 8,
+    3, 10, 9,
+    3, 6, 10,
+    8, 9, 14,
+    8, 14, 11,
+    11, 14, 13,
+    13, 14, 15,
+    7, 11, 13,
+    7, 13, 12,
+    7, 8, 11,
 ];
 
 // This will store the state of our game
@@ -37,7 +82,6 @@ pub struct State {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
-    is_hat: bool,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -178,7 +222,6 @@ impl State {
             queue,
             config,
             is_surface_configured: false,
-            is_hat: false,
             render_pipeline,
             vertex_buffer,
             index_buffer,
@@ -251,7 +294,39 @@ impl State {
                 event_loop.exit();
             }
             KeyCode::Space => {
-                self.is_hat = is_pressed;
+                if is_pressed {
+                    self.vertex_buffer = self.device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(HAT_VERTICES),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        },
+                    );
+                    self.index_buffer = self.device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Index Buffer"),
+                            contents: bytemuck::cast_slice(HAT_INDICES),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }
+                    );
+                    self.num_indices = HAT_INDICES.len() as u32;
+                } else {
+                    self.vertex_buffer = self.device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(VERTICES),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        },
+                    );
+                    self.index_buffer = self.device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Index Buffer"),
+                            contents: bytemuck::cast_slice(INDICES),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }
+                    );
+                    self.num_indices = INDICES.len() as u32;
+                }
             }
             _ => {}
         }
