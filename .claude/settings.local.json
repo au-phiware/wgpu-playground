@@ -9,7 +9,8 @@
       "Bash(jj git init:*)",
       "Bash(mv:*)",
       "Bash(mask pack:*)",
-      "Bash(jj diff:*)"
+      "Bash(jj diff:*)",
+      "Bash(jj log:*)"
     ]
   },
   "enableAllProjectMcpServers": false
