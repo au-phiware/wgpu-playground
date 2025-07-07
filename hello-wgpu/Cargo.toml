@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 bytemuck = { workspace = true, features = [ "derive" ] }
+cgmath = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
