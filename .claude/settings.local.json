@@ -10,7 +10,10 @@
       "Bash(mv:*)",
       "Bash(mask pack:*)",
       "Bash(jj diff:*)",
-      "Bash(jj log:*)"
+      "Bash(jj log:*)",
+      "Bash(mask:*)",
+      "Bash(jj desc:*)",
+      "Bash(jj new:*)"
     ]
   },
   "enableAllProjectMcpServers": false

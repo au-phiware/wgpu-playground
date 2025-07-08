@@ -1,10 +1,7 @@
 use crate::state::State;
 use std::sync::Arc;
 use winit::{
-    application::ApplicationHandler,
-    event::*,
-    event_loop::ActiveEventLoop,
-    keyboard::PhysicalKey,
+    application::ApplicationHandler, event::*, event_loop::ActiveEventLoop, keyboard::PhysicalKey,
     window::Window,
 };
 
@@ -18,7 +15,9 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &winit::event_loop::EventLoop<State>) -> Self {
+    pub fn new(
+        #[cfg(target_arch = "wasm32")] event_loop: &winit::event_loop::EventLoop<State>,
+    ) -> Self {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
         Self {

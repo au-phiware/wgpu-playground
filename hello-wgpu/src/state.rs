@@ -340,6 +340,9 @@ impl State {
             self.config.height = cmp::min(height, 2048);
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+
+            // Update camera aspect ratio when window is resized
+            self.camera.aspect = self.config.width as f32 / self.config.height as f32;
         }
     }
 
@@ -350,6 +353,9 @@ impl State {
         if !self.is_surface_configured {
             return Ok(());
         }
+
+        // Update camera and uniform buffer
+        self.update();
 
         let output = self.surface.get_current_texture()?;
 
@@ -445,7 +451,7 @@ impl State {
         }
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(
