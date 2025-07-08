@@ -4,6 +4,7 @@ mod camera_controller;
 mod state;
 mod texture;
 mod vertex;
+mod instance;
 
 use app::App;
 use winit::event_loop::EventLoop;
