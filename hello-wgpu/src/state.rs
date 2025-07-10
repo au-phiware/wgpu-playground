@@ -2,9 +2,11 @@
 
 use crate::camera::{Camera, CameraUniform};
 use crate::camera_controller::CameraController;
-use crate::texture::Texture;
-use crate::vertex::Vertex;
 use crate::instance::{Instance, InstanceRaw};
+use crate::model::{DrawModel, Model, ModelVertex, Vertex};
+use crate::resources;
+use crate::texture::Texture;
+use cgmath::prelude::*;
 use std::cmp;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -15,66 +17,12 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
-use cgmath::prelude::*;
-
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-const SQRT3_OVER_2: f32 = 0.866_025_4; // √3/2 for triangular grid spacing
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [0.0, 0.5 * SQRT3_OVER_2, 0.0],
-        tex_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5 * SQRT3_OVER_2, 0.0],
-        tex_coords: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5 * SQRT3_OVER_2, 0.0],
-        tex_coords: [1.0, 0.0],
-    },
-];
-
-const INDICES: &[u16] = &[0, 1, 2];
-
-const fn make_vertex(x: f32, y: f32, tex_coords: [f32; 2]) -> Vertex {
-    Vertex {
-        position: [x / 3.0, y * SQRT3_OVER_2 / 3.0, 0.0],
-        tex_coords,
-    }
-}
-
-// The Hat (acyclic monotile) on triangular grid
-// Hat vertices on triangular grid (6 rows, 6 triangles per row)
-const HAT_VERTICES: &[Vertex] = &[
-    make_vertex(-2.5, -2.5, [1.0, 1.0]), //  0
-    make_vertex(-1.5, -2.5, [0.0, 1.0]), //  1
-    make_vertex(-0.5, -2.5, [1.0, 1.0]), //  2
-    make_vertex(1.5, -2.5, [1.0, 1.0]),  //  3
-    make_vertex(-3.0, -1.5, [0.0, 0.0]), //  4
-    make_vertex(0.0, -1.5, [1.0, 0.0]),  //  5
-    make_vertex(3.0, -1.5, [0.0, 0.0]),  //  6
-    make_vertex(-1.5, -0.5, [1.0, 1.0]), //  7
-    make_vertex(0.5, -0.5, [1.0, 1.0]),  //  8
-    make_vertex(1.5, -0.5, [0.0, 1.0]),  //  9
-    make_vertex(2.5, -0.5, [1.0, 1.0]),  // 10
-    make_vertex(0.0, 0.5, [0.0, 0.0]),   // 11
-    make_vertex(-1.5, 1.5, [0.0, 1.0]),  // 12
-    make_vertex(-0.5, 1.5, [1.0, 1.0]),  // 13
-    make_vertex(1.5, 1.5, [1.0, 1.0]),   // 14
-    make_vertex(0.0, 2.5, [1.0, 0.0]),   // 15
-];
-
-const HAT_INDICES: &[u16] = &[
-    0, 7, 4, 1, 7, 0, 2, 7, 1, 5, 7, 2, 8, 7, 5, 3, 8, 5, 3, 9, 8, 3, 10, 9, 3, 6, 10, 8, 9, 14, 8,
-    14, 11, 11, 14, 13, 13, 14, 15, 7, 11, 13, 7, 13, 12, 7, 8, 11,
-];
-
+const GAP: f32 = 4.0;
 const NUM_INSTANCES_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
 // This will store the state of our game
 pub struct State {
@@ -85,9 +33,7 @@ pub struct State {
     pub config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    obj_model: Model,
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: Texture,
     camera: Camera,
@@ -250,32 +196,37 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: z as f32 } - INSTANCE_DISPLACEMENT;
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: GAP * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0),
+                        y: 0.0,
+                        z: GAP * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0),
+                    };
 
-                let rotation = if position.is_zero() {
-                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                    // as Quaternions can affect scale if they're not created correctly
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                };
+                    let rotation = if position.is_zero() {
+                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                        // as Quaternions can affect scale if they're not created correctly
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                    };
 
-                Instance {
-                    position, rotation,
-                }
+                    Instance { position, rotation }
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Instance Buffer"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -297,7 +248,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc(), InstanceRaw::desc()],
+                buffers: &[ModelVertex::desc(), InstanceRaw::desc()],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -330,7 +281,7 @@ impl State {
                 format: Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less, // 1.
-                stencil: wgpu::StencilState::default(), // 2.
+                stencil: wgpu::StencilState::default(),     // 2.
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState {
@@ -345,36 +296,27 @@ impl State {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
+        let obj_model =
+            resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+                .await
+                .unwrap();
 
         Ok(Self {
+            window,
             surface,
             device,
             queue,
             config,
             is_surface_configured: false,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
-            diffuse_texture,
+            obj_model,
             diffuse_bind_group,
+            diffuse_texture,
             camera,
-            camera_controller,
+            camera_uniform,
             camera_buffer,
             camera_bind_group,
-            camera_uniform,
-            window,
+            camera_controller,
             instances,
             instance_buffer,
             depth_texture,
@@ -387,11 +329,8 @@ impl State {
             self.config.height = cmp::min(height, 2048);
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
-            self.depth_texture = Texture::create_depth_texture(
-                &self.device,
-                &self.config,
-                "depth_texture",
-            );
+            self.depth_texture =
+                Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
 
             // Update camera aspect ratio when window is resized
             self.camera.aspect = self.config.width as f32 / self.config.height as f32;
@@ -452,10 +391,8 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+            render_pass.draw_model_instanced(&self.obj_model, 0..self.instances.len() as u32, &self.camera_bind_group);
         }
 
         // submit will accept anything that implements IntoIter
@@ -469,41 +406,6 @@ impl State {
         match code {
             KeyCode::Escape if is_pressed => {
                 event_loop.exit();
-            }
-            KeyCode::Space => {
-                if is_pressed {
-                    self.vertex_buffer =
-                        self.device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Vertex Buffer"),
-                                contents: bytemuck::cast_slice(HAT_VERTICES),
-                                usage: wgpu::BufferUsages::VERTEX,
-                            });
-                    self.index_buffer =
-                        self.device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Index Buffer"),
-                                contents: bytemuck::cast_slice(HAT_INDICES),
-                                usage: wgpu::BufferUsages::INDEX,
-                            });
-                    self.num_indices = HAT_INDICES.len() as u32;
-                } else {
-                    self.vertex_buffer =
-                        self.device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Vertex Buffer"),
-                                contents: bytemuck::cast_slice(VERTICES),
-                                usage: wgpu::BufferUsages::VERTEX,
-                            });
-                    self.index_buffer =
-                        self.device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Index Buffer"),
-                                contents: bytemuck::cast_slice(INDICES),
-                                usage: wgpu::BufferUsages::INDEX,
-                            });
-                    self.num_indices = INDICES.len() as u32;
-                }
             }
             _ => {
                 self.camera_controller.handle_key(code, is_pressed);

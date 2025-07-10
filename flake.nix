@@ -44,6 +44,14 @@
             vulkan-headers
             vulkan-validation-layers
             
+            # Mesa drivers for OpenGL/Vulkan
+            mesa
+            mesa.drivers
+            
+            # OpenSSL for reqwest and networking
+            openssl
+            openssl.dev
+            
             # Additional development tools
             cargo-watch
             cargo-edit
@@ -60,11 +68,11 @@
           
           shellHook = ''
             export RUST_BACKTRACE=1
-            export VK_LAYER_PATH="${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d"
             
-            # Ensure Vulkan loader can find the layers
-            export VK_ICD_FILENAMES="${pkgs.vulkan-loader}/share/vulkan/icd.d/intel_icd.x86_64.json:${pkgs.vulkan-loader}/share/vulkan/icd.d/radeon_icd.x86_64.json:${pkgs.vulkan-loader}/share/vulkan/icd.d/nvidia_icd.json"
-            
+            # Set up Mesa drivers
+            export LIBGL_DRIVERS_PATH="${pkgs.mesa.drivers}/lib/dri"
+            export VK_ICD_FILENAMES="${pkgs.mesa.drivers}/share/vulkan/icd.d/radeon_icd.x86_64.json:${pkgs.mesa.drivers}/share/vulkan/icd.d/intel_icd.x86_64.json"
+
             echo "🦀 Rust WebGPU development environment loaded!"
             echo "Rust version: $(rustc --version)"
             echo "Cargo version: $(cargo --version)"
@@ -80,6 +88,7 @@
             pkgs.xorg.libXi
             pkgs.xorg.libXrandr
             pkgs.vulkan-loader
+            pkgs.openssl
           ];
         };
       }
