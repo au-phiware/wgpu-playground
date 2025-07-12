@@ -13,6 +13,7 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
+          config.allowUnfree = true;
         };
         
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
@@ -46,7 +47,6 @@
             
             # Mesa drivers for OpenGL/Vulkan
             mesa
-            mesa.drivers
             
             # OpenSSL for reqwest and networking
             openssl
@@ -60,6 +60,7 @@
             jujutsu
             wasm-pack
             miniserve
+            claude-code
             
             # Optional: debugging and profiling
             gdb
@@ -70,8 +71,8 @@
             export RUST_BACKTRACE=1
             
             # Set up Mesa drivers
-            export LIBGL_DRIVERS_PATH="${pkgs.mesa.drivers}/lib/dri"
-            export VK_ICD_FILENAMES="${pkgs.mesa.drivers}/share/vulkan/icd.d/radeon_icd.x86_64.json:${pkgs.mesa.drivers}/share/vulkan/icd.d/intel_icd.x86_64.json"
+            export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
+            export VK_ICD_FILENAMES="${pkgs.mesa}/share/vulkan/icd.d/radeon_icd.x86_64.json:${pkgs.mesa}/share/vulkan/icd.d/intel_icd.x86_64.json"
 
             echo "🦀 Rust WebGPU development environment loaded!"
             echo "Rust version: $(rustc --version)"
