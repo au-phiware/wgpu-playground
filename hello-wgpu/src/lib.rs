@@ -6,6 +6,7 @@ mod model;
 mod resources;
 mod state;
 mod texture;
+mod light;
 
 use app::App;
 use winit::event_loop::EventLoop;
