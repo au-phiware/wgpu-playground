@@ -20,6 +20,7 @@ cgmath = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
+rand = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 
@@ -28,6 +29,7 @@ console_error_panic_hook = { workspace = true }
 console_log = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 wasm-bindgen = { workspace = true }
+getrandom = { workspace = true, features = ["wasm_js"] }
 web-sys = { workspace = true, features = [
     "Document",
     "Window",

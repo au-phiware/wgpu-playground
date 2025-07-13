@@ -26,7 +26,7 @@ impl AppState {
     async fn new(window: Arc<Window>) -> Result<Self> {
         let gpu = GpuContext::new(window).await?;
 
-        let renderer = Renderer::new(&"Main");
+        let renderer = Renderer::new(&"Main", &gpu.device, gpu.surface.format());
 
         Ok(Self {
             gpu,

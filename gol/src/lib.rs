@@ -1,4 +1,5 @@
 mod app;
+mod conway;
 mod gpu;
 mod renderer;
 

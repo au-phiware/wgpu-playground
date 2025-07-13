@@ -1,0 +1,5 @@
+# Configuration for Conway's Game of Life project
+# This enables getrandom to work with WebAssembly builds
+
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

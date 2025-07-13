@@ -22,6 +22,10 @@ impl SurfaceManager {
     pub fn is_configured(&self) -> bool {
         self.is_configured
     }
+    
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.config.format
+    }
 
     fn configure(&mut self, device: &Device) {
         self.surface.configure(device, &self.config);
