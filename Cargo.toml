@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "hello-wgpu",
+    "gol",
 ]
 resolver = "3"
 
