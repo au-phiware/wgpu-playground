@@ -102,7 +102,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let view_dir = normalize(in.tangent_view_position - in.tangent_position);
     let half_dir = normalize(view_dir + light_dir);
 
-    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
+    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 2.0);
     let specular_color = light.color * specular_strength;
 
     let diffuse_strength = max(dot(tangent_normal, light_dir), 0.0);

@@ -2,11 +2,11 @@ mod app;
 mod camera;
 mod camera_controller;
 mod instance;
+mod light;
 mod model;
 mod resources;
 mod state;
 mod texture;
-mod light;
 
 use app::App;
 use winit::event_loop::EventLoop;

@@ -106,11 +106,10 @@ pub async fn load_model(
         .await?;
 
         materials.push(model::Material::new(
-                device,
-                &m.name,
-                diffuse_texture,
-                normal_texture,
-                layout,
+            device,
+            diffuse_texture,
+            normal_texture,
+            layout,
         ))
     }
 
@@ -220,7 +219,7 @@ pub async fn load_model(
             // Average the tangents/bitangents
             for (i, n) in triangles_included.into_iter().enumerate() {
                 let denom = 1.0 / n as f32;
-                let mut v = &mut vertices[i];
+                let v = &mut vertices[i];
                 v.tangent = (cgmath::Vector3::from(v.tangent) * denom).into();
                 v.bitangent = (cgmath::Vector3::from(v.bitangent) * denom).into();
             }
@@ -237,7 +236,6 @@ pub async fn load_model(
             });
 
             model::Mesh {
-                name: file_name.to_string(),
                 vertex_buffer,
                 index_buffer,
                 num_elements: m.mesh.indices.len() as u32,

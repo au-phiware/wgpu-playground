@@ -3,10 +3,10 @@
 use crate::camera::{Camera, CameraUniform};
 use crate::camera_controller::CameraController;
 use crate::instance::{Instance, InstanceRaw};
-use crate::model::{DrawModel, DrawLight, Model, ModelVertex, Vertex};
+use crate::light::LightUniform;
+use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex};
 use crate::resources::load_model;
 use crate::texture::Texture;
-use crate::light::LightUniform;
 use cgmath::prelude::*;
 use std::cmp;
 use std::sync::Arc;
@@ -60,7 +60,7 @@ fn create_render_pipeline(
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Render Pipeline"),
-        layout: Some(&layout),
+        layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
@@ -223,13 +223,11 @@ impl State {
         };
 
         // We'll want to update our lights position, so we use COPY_DST
-        let light_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Light VB"),
-                contents: bytemuck::cast_slice(&[light_uniform]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            }
-        );
+        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Light VB"),
+            contents: bytemuck::cast_slice(&[light_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let light_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -356,10 +354,7 @@ impl State {
             &device,
             &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[
-                    &light_bind_group_layout,
-                    &camera_bind_group_layout,
-                ],
+                bind_group_layouts: &[&light_bind_group_layout, &camera_bind_group_layout],
                 push_constant_ranges: &[],
             }),
             config.format,
@@ -370,10 +365,9 @@ impl State {
             },
         );
 
-        let obj_model =
-            load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
-                .await
-                .unwrap();
+        let obj_model = load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+            .await
+            .unwrap();
 
         Ok(Self {
             window,
@@ -467,10 +461,19 @@ impl State {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
             render_pass.set_pipeline(&self.light_render_pipeline);
-            render_pass.draw_light_model(&self.obj_model, &self.light_bind_group, &self.camera_bind_group);
+            render_pass.draw_light_model(
+                &self.obj_model,
+                &self.light_bind_group,
+                &self.camera_bind_group,
+            );
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw_model_instanced(&self.obj_model, 0..self.instances.len() as u32, &self.light_bind_group, &self.camera_bind_group);
+            render_pass.draw_model_instanced(
+                &self.obj_model,
+                0..self.instances.len() as u32,
+                &self.light_bind_group,
+                &self.camera_bind_group,
+            );
         }
 
         // submit will accept anything that implements IntoIter
@@ -503,8 +506,12 @@ impl State {
         let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
         self.light_uniform.position =
             (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(0.3))
-             * old_position)
-            .into();
-        self.queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[self.light_uniform]));
+                * old_position)
+                .into();
+        self.queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[self.light_uniform]),
+        );
     }
 }

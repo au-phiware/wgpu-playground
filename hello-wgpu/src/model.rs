@@ -53,24 +53,18 @@ impl Vertex for ModelVertex {
     }
 }
 
-#[allow(dead_code)]
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
 }
 
-#[allow(dead_code)]
 pub struct Material {
-    pub name: String,
-    pub diffuse_texture: Texture,
-    pub normal_texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 
 impl Material {
     pub fn new(
         device: &wgpu::Device,
-        name: &str,
         diffuse_texture: Texture,
         normal_texture: Texture,
         layout: &wgpu::BindGroupLayout,
@@ -98,18 +92,11 @@ impl Material {
             label: None,
         });
 
-        Self {
-            name: String::from(name),
-            diffuse_texture,
-            normal_texture,
-            bind_group,
-        }
+        Self { bind_group }
     }
 }
 
-#[allow(dead_code)]
 pub struct Mesh {
-    pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_elements: u32,
@@ -117,7 +104,14 @@ pub struct Mesh {
 }
 
 pub trait DrawModel<'a> {
-    fn draw_mesh(&mut self, mesh: &'a Mesh, material: &'a Material, light_bind_group: &'a wgpu::BindGroup, camera_bind_group: &'a wgpu::BindGroup);
+    #[allow(dead_code)]
+    fn draw_mesh(
+        &mut self,
+        mesh: &'a Mesh,
+        material: &'a Material,
+        light_bind_group: &'a wgpu::BindGroup,
+        camera_bind_group: &'a wgpu::BindGroup,
+    );
     fn draw_mesh_instanced(
         &mut self,
         mesh: &'a Mesh,
@@ -126,7 +120,13 @@ pub trait DrawModel<'a> {
         light_bind_group: &'a wgpu::BindGroup,
         camera_bind_group: &'a wgpu::BindGroup,
     );
-    fn draw_model(&mut self, model: &'a Model, light_bind_group: &'a wgpu::BindGroup, camera_bind_group: &'a wgpu::BindGroup);
+    #[allow(dead_code)]
+    fn draw_model(
+        &mut self,
+        model: &'a Model,
+        light_bind_group: &'a wgpu::BindGroup,
+        camera_bind_group: &'a wgpu::BindGroup,
+    );
     fn draw_model_instanced(
         &mut self,
         model: &'a Model,
@@ -140,7 +140,13 @@ impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
 where
     'b: 'a,
 {
-    fn draw_mesh(&mut self, mesh: &'a Mesh, material: &'a Material, light_bind_group: &'a wgpu::BindGroup, camera_bind_group: &'a wgpu::BindGroup) {
+    fn draw_mesh(
+        &mut self,
+        mesh: &'a Mesh,
+        material: &'a Material,
+        light_bind_group: &'a wgpu::BindGroup,
+        camera_bind_group: &'a wgpu::BindGroup,
+    ) {
         self.draw_mesh_instanced(mesh, material, 0..1, light_bind_group, camera_bind_group);
     }
 
@@ -160,7 +166,12 @@ where
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
-    fn draw_model(&mut self, model: &'b Model, light_bind_group: &'b wgpu::BindGroup, camera_bind_group: &'b wgpu::BindGroup) {
+    fn draw_model(
+        &mut self,
+        model: &'b Model,
+        light_bind_group: &'b wgpu::BindGroup,
+        camera_bind_group: &'b wgpu::BindGroup,
+    ) {
         self.draw_model_instanced(model, 0..1, light_bind_group, camera_bind_group);
     }
 
@@ -173,12 +184,19 @@ where
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), light_bind_group, camera_bind_group);
+            self.draw_mesh_instanced(
+                mesh,
+                material,
+                instances.clone(),
+                light_bind_group,
+                camera_bind_group,
+            );
         }
     }
 }
 
 pub trait DrawLight<'a> {
+    #[allow(dead_code)]
     fn draw_light_mesh(
         &mut self,
         mesh: &'a Mesh,
@@ -251,7 +269,12 @@ where
         camera_bind_group: &'b wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
-            self.draw_light_mesh_instanced(mesh, instances.clone(), light_bind_group, camera_bind_group);
+            self.draw_light_mesh_instanced(
+                mesh,
+                instances.clone(),
+                light_bind_group,
+                camera_bind_group,
+            );
         }
     }
 }
