@@ -34,5 +34,6 @@ web-sys = { workspace = true, features = [
     "Document",
     "Window",
     "Element",
+    "Location",
 ] }
-wgpu = { workspace = true, features = ["webgl"] }
+wgpu = { workspace = true }

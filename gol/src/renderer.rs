@@ -1,5 +1,5 @@
-use crate::gpu::GpuContext;
 use crate::conway::ConwayCompute;
+use crate::gpu::GpuContext;
 use winit::window::Window;
 
 pub struct Renderer {
@@ -10,84 +10,92 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(name: &str, device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
-        let conway = ConwayCompute::new(device);
-        
+    pub fn new(name: &str, ctx: &GpuContext) -> Self {
+        let conway = ConwayCompute::new(&ctx.device, &ctx.queue);
+
         // Create display shader
-        let display_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Display Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("display.wgsl").into()),
-        });
+        let display_shader = &ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Display Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("display.wgsl").into()),
+            });
 
         // Create bind group layout for Conway state buffer
-        let display_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Display Bind Group Layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
+        let display_bind_group_layout =
+            &ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Display Bind Group Layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    }],
+                });
 
         // Create display bind group
-        let display_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let display_bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Display Bind Group"),
             layout: &display_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: conway.get_current_buffer().as_entire_binding(),
+                resource: wgpu::BindingResource::TextureView(conway.get_current_texture_view()),
             }],
         });
 
         // Create display pipeline
-        let display_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Display Pipeline Layout"),
-            bind_group_layouts: &[&display_bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let display_pipeline_layout =
+            ctx.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Display Pipeline Layout"),
+                    bind_group_layouts: &[&display_bind_group_layout],
+                    push_constant_ranges: &[],
+                });
 
-        let display_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Display Pipeline"),
-            layout: Some(&display_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &display_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],  // No vertex buffers - we generate fullscreen triangle in shader
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &display_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,  // No culling for fullscreen triangle
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        });
+        let display_pipeline = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Display Pipeline"),
+                layout: Some(&display_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &display_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[], // No vertex buffers - we generate fullscreen triangle in shader
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &display_shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: ctx.surface.format(),
+                        blend: Some(wgpu::BlendState::REPLACE),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None, // No culling for fullscreen triangle
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
 
         Self {
             name: name.to_string(),
@@ -105,7 +113,9 @@ impl Renderer {
         }
 
         let output = ctx.surface.get_current_texture()?;
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = ctx
             .device
@@ -141,7 +151,7 @@ impl Renderer {
             // Draw fullscreen triangle with Conway's state
             render_pass.set_pipeline(&self.display_pipeline);
             render_pass.set_bind_group(0, &self.display_bind_group, &[]);
-            render_pass.draw(0..3, 0..1);  // 3 vertices for fullscreen triangle
+            render_pass.draw(0..3, 0..1); // 3 vertices for fullscreen triangle
         }
 
         ctx.queue.submit(std::iter::once(encoder.finish()));

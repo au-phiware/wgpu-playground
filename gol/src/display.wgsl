@@ -18,8 +18,8 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     return out;
 }
 
-// Conway state buffer
-@group(0) @binding(0) var<storage, read> conway_state: array<u32>;
+// Conway state texture
+@group(0) @binding(0) var conway_state: texture_2d<f32>;
 
 const GRID_SIZE: u32 = 64u;
 
@@ -33,12 +33,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         return vec4<f32>(0.0, 0.0, 0.0, 1.0);  // Black for out of bounds
     }
     
-    // Sample Conway state
-    let index = grid_pos.y * GRID_SIZE + grid_pos.x;
-    let cell = conway_state[index];
+    // Sample Conway state from texture
+    let coord = vec2<i32>(i32(grid_pos.x), i32(grid_pos.y));
+    let cell = textureLoad(conway_state, coord, 0).r;
     
     // Live cells = white, dead cells = black
-    if (cell == 1u) {
+    if (cell > 0.5) {
         return vec4<f32>(1.0, 1.0, 1.0, 1.0);  // White = alive
     } else {
         return vec4<f32>(0.0, 0.0, 0.0, 1.0);  // Black = dead

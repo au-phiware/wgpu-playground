@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use winit::{
     application::ApplicationHandler, event::*, event_loop::ActiveEventLoop,
+    keyboard::Key,
     window::{Window, WindowId},
 };
 
@@ -14,7 +15,9 @@ use wasm_bindgen::prelude::*;
 pub struct App {
     #[cfg(target_arch = "wasm32")]
     proxy: Option<winit::event_loop::EventLoopProxy<AppState>>,
+    window: Option<Arc<Window>>,
     state: Option<AppState>,
+    keyboard_modifiers: winit::keyboard::ModifiersState,
 }
 
 pub struct AppState {
@@ -26,7 +29,7 @@ impl AppState {
     async fn new(window: Arc<Window>) -> Result<Self> {
         let gpu = GpuContext::new(window).await?;
 
-        let renderer = Renderer::new(&"Main", &gpu.device, gpu.surface.format());
+        let renderer = Renderer::new(&"Main", &gpu);
 
         Ok(Self {
             gpu,
@@ -39,12 +42,12 @@ impl App {
     pub fn new(
         #[cfg(target_arch = "wasm32")] event_loop: &winit::event_loop::EventLoop<AppState>,
     ) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let proxy = Some(event_loop.create_proxy());
         Self {
             #[cfg(target_arch = "wasm32")]
-            proxy,
+            proxy: Some(event_loop.create_proxy()),
+            window: None,
             state: None,
+            keyboard_modifiers: Default::default(),
         }
     }
 }
@@ -70,6 +73,8 @@ impl ApplicationHandler<AppState> for App {
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
+        self.window = Some(window.clone());
+
         #[cfg(not(target_arch = "wasm32"))]
         {
             // If we are not on web we can use pollster to
@@ -88,7 +93,7 @@ impl ApplicationHandler<AppState> for App {
                             .send_event(
                                 AppState::new(window)
                                     .await
-                                    .expect("Unable to create canvas!!!")
+                                    .expect("Unable to create canvas!")
                             )
                             .is_ok()
                     )
@@ -112,15 +117,10 @@ impl ApplicationHandler<AppState> for App {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let state = match &mut self.state {
-            Some(state) => state,
-            None => return,
-        };
-
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(_) => state.gpu.resize(),
-            WindowEvent::RedrawRequested => {
+        match (&mut self.state, event) {
+            (_, WindowEvent::CloseRequested) => event_loop.exit(),
+            (Some(state), WindowEvent::Resized(_)) => state.gpu.resize(),
+            (Some(state), WindowEvent::RedrawRequested) => {
                 match state.renderer.render(&state.gpu.surface.window, &state.gpu) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -128,6 +128,37 @@ impl ApplicationHandler<AppState> for App {
                     }
                     Err(e) => {
                         log::error!("Unable to render {e}");
+                    }
+                }
+            }
+            (_, WindowEvent::ModifiersChanged(modifiers)) => {
+                self.keyboard_modifiers = modifiers.state();
+            }
+            (state, WindowEvent::KeyboardInput { event, .. }) => {
+                if self.keyboard_modifiers.control_key() && event.state == winit::event::ElementState::Pressed {
+                    match event.logical_key {
+                        Key::Character(ref key) if key == &"q" => {
+                            #[cfg(target_arch = "wasm32")]
+                            if let Some(window) = web_sys::window() {
+                                let _ = window.close();
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                event_loop.exit();
+                            }
+                        }
+                        Key::Character(ref key) if key == &"r" => {
+                            #[cfg(target_arch = "wasm32")]
+                            if let Some(window) = web_sys::window() {
+                                let _ = window.location().reload();
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            if let (Some(state), Some(window)) = (state, &self.window) {
+                                state.renderer = Renderer::new(&"Main", &state.gpu);
+                                window.request_redraw();
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

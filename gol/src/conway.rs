@@ -1,44 +1,44 @@
-use wgpu::util::DeviceExt;
-
-const GRID_SIZE: u32 = 64;  // Start small for debugging
-const WORKGROUP_SIZE: u32 = 8;
+const GRID_SIZE: u32 = 64; // Start small for debugging
+const WORKGROUP_SIZE: u32 = 16;
 
 pub struct ConwayCompute {
     compute_pipeline: wgpu::ComputePipeline,
-    state_buffers: [wgpu::Buffer; 2],  // Ping-pong buffers
-    current_buffer: usize,
+    state_views: [wgpu::TextureView; 2],
+    current_texture: usize,
     bind_groups: [wgpu::BindGroup; 2],
 }
 
 impl ConwayCompute {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         // Create compute shader
         let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Conway Compute Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("conway.wgsl").into()),
         });
 
-        // Create bind group layout
+        // Create bind group layout for textures
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Conway Bind Group Layout"),
+            label: Some("Conway Texture Bind Group Layout"),
             entries: &[
+                // Input texture (read)
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     },
                     count: None,
                 },
+                // Output storage texture (write)
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::R32Float,
+                        view_dimension: wgpu::TextureViewDimension::D2,
                     },
                     count: None,
                 },
@@ -62,53 +62,88 @@ impl ConwayCompute {
             cache: None,
         });
 
-        // Create initial random state
-        let initial_state: Vec<u32> = (0..GRID_SIZE * GRID_SIZE)
-            .map(|_| if rand::random::<f32>() > 0.7 { 1 } else { 0 })
+        // Create initial state data as floats
+        let initial_state: Vec<f32> = (0..GRID_SIZE * GRID_SIZE)
+            .map(|_| if rand::random::<f32>() > 0.7 { 1.0 } else { 0.0 })
             .collect();
 
-        // Create ping-pong buffers
-        let state_buffers = [
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Conway State Buffer A"),
-                contents: bytemuck::cast_slice(&initial_state),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            }),
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Conway State Buffer B"),
-                size: (initial_state.len() * std::mem::size_of::<u32>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }),
+        // Create texture descriptor
+        let texture_descriptor = wgpu::TextureDescriptor {
+            label: Some("Conway State Texture"),
+            size: wgpu::Extent3d {
+                width: GRID_SIZE,
+                height: GRID_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        };
+
+        // Create ping-pong textures
+        let state_textures = [
+            device.create_texture(&texture_descriptor),
+            device.create_texture(&texture_descriptor),
         ];
 
-        // Create bind groups
+        // Initialize first texture with data
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &state_textures[0],
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            bytemuck::cast_slice(&initial_state),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(GRID_SIZE * 4), // 4 bytes per f32
+                rows_per_image: Some(GRID_SIZE),
+            },
+            wgpu::Extent3d {
+                width: GRID_SIZE,
+                height: GRID_SIZE,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let state_views = [
+            state_textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
+            state_textures[1].create_view(&wgpu::TextureViewDescriptor::default()),
+        ];
+
+        // Create bind groups (ping-pong)
         let bind_groups = [
             device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Conway Bind Group A"),
+                label: Some("Conway Texture Bind Group A"),
                 layout: &bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: state_buffers[0].as_entire_binding(),
+                        resource: wgpu::BindingResource::TextureView(&state_views[0]),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: state_buffers[1].as_entire_binding(),
+                        resource: wgpu::BindingResource::TextureView(&state_views[1]),
                     },
                 ],
             }),
             device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Conway Bind Group B"),
+                label: Some("Conway Texture Bind Group B"),
                 layout: &bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: state_buffers[1].as_entire_binding(),
+                        resource: wgpu::BindingResource::TextureView(&state_views[1]),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: state_buffers[0].as_entire_binding(),
+                        resource: wgpu::BindingResource::TextureView(&state_views[0]),
                     },
                 ],
             }),
@@ -116,8 +151,8 @@ impl ConwayCompute {
 
         Self {
             compute_pipeline,
-            state_buffers,
-            current_buffer: 0,
+            state_views,
+            current_texture: 0,
             bind_groups,
         }
     }
@@ -129,20 +164,20 @@ impl ConwayCompute {
         });
 
         compute_pass.set_pipeline(&self.compute_pipeline);
-        compute_pass.set_bind_group(0, &self.bind_groups[self.current_buffer], &[]);
-        
+        compute_pass.set_bind_group(0, &self.bind_groups[self.current_texture], &[]);
+
         let workgroups_x = (GRID_SIZE + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
         let workgroups_y = (GRID_SIZE + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-        
+
         compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
-        
+
         drop(compute_pass);
-        
-        // Swap buffers for next iteration
-        self.current_buffer = 1 - self.current_buffer;
+
+        // Swap textures for next iteration
+        self.current_texture = 1 - self.current_texture;
     }
-    
-    pub fn get_current_buffer(&self) -> &wgpu::Buffer {
-        &self.state_buffers[1 - self.current_buffer]  // The one we just wrote to
+
+    pub fn get_current_texture_view(&self) -> &wgpu::TextureView {
+        &self.state_views[1 - self.current_texture] // The one we just wrote to
     }
 }

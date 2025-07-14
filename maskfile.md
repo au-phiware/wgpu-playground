@@ -103,6 +103,24 @@ OPTIONS
 miniserve --index index.html --port ${port:-8080} --spa ${project}
 ```
 
+## start (project)
+
+Serve a project on port 8080
+
+OPTIONS
+
+- port
+  - flags: -p --port
+  - type: string
+  - desc: Port to serve on (default: 8080)
+
+```bash
+mprocs --names '📦 pack,🌐 serve,🚀 launch' \
+       "cargo watch --watch ${project}/src --shell 'mask pack ${project}'" \
+       "mask serve --port ${port:-8080} ${project}" \
+       "chromium-webgpu --app=http://localhost:${port:-8080}"
+```
+
 ## deps
 
 Update dependencies

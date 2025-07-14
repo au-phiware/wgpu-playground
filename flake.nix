@@ -61,6 +61,12 @@
             wasm-pack
             miniserve
             claude-code
+            mprocs
+            
+            # WebGPU-enabled Chromium script
+            (pkgs.writeShellScriptBin "chromium-webgpu" ''
+              exec chromium --enable-features=WebGPU,Vulkan --enable-unsafe-webgpu --disable-dawn-features=disallow_unsafe_apis "$@"
+            '')
             
             # Optional: debugging and profiling
             gdb
@@ -74,9 +80,12 @@
             export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
             export VK_ICD_FILENAMES="${pkgs.mesa}/share/vulkan/icd.d/radeon_icd.x86_64.json:${pkgs.mesa}/share/vulkan/icd.d/intel_icd.x86_64.json"
 
+            
             echo "🦀 Rust WebGPU development environment loaded!"
             echo "Rust version: $(rustc --version)"
             echo "Cargo version: $(cargo --version)"
+            echo "Chromium available for WebGPU testing: $(chromium --version 2>/dev/null || echo 'Not found')"
+            echo "🌐 Use 'chromium-webgpu http://127.0.0.1:8080' to test WebGPU apps"
           '';
           
           # Set environment variables for graphics libraries
